@@ -10,6 +10,9 @@ eta = 0.5; alpha = 0.9
 x = [[0, 0, 0], [1, 0, 0], [1, 1, 0],[1, 0, 1], [1, 1, 1]]
 y = [[0, 0], [0, 0], [0, 1], [0, 1], [0, 0]]
 
+first_iter = True
+
+u = [0.0 for i in range(p+1)]
 h = [0.0 for i in range(m+1)]
 dh = [0.0 for i in range(m+1)]
 w_ = [[0.0 for i in range(m+1)] for j in range(n+1)]  
@@ -31,7 +34,7 @@ for k in range(1, p+1):
 # Ucenje
 for iters in range (0, maxiters): 
     # U svakoj iteraciji se bira proizvoljan od moguca 4 ulaza
-    t = random.randrange(1,4+1)
+    t = random.randrange(1,len(x))
 
     # Izracunavanje h1,..., hm
     h[0] = 1.0
@@ -68,14 +71,25 @@ for iters in range (0, maxiters):
             * o[t][k] * (1.0 - o[t][k]) \
             + alpha * dw__[j][k]        
             w__[j][k] += dw__[j][k]
-        
     
-
+    if first_iter == True:
+        for i in range(1,len(x)):
+            for k in range(1,p+1):
+                x[i].append(o[t][k])
+            print(x[i])
+        first_iter = False
+    else:
+        x_list = list(range(n+1,n+p+1)) # [3]
+        o_list = list(range(1,p+1))     # [1]
+        for i in range(1,len(x)):
+            for (k, l) in zip(x_list, o_list):
+                x[i][k] = o[t][l]
+            #print("Azuriranje {}: {}".format(iters, x[i]))
 
 # Testiranje
 for i in range(1,5):
     print(x[i][1], x[i][2], end='')
-    print(" ", y[i][0], o[i][0], y[i][1], o[i][1])
+    print(" ", y[i][1], o[i][1])
     
   
 
