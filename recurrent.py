@@ -84,7 +84,7 @@ for iters in range (0, maxiters):
         for i in range(1,len(x)):
             for (k, l) in zip(x_list, o_list):
                 x[i][k] = o[t][l]
-            #print("Azuriranje {}: {}".format(iters, x[i]))
+            print("Azuriranje {}: {}".format(iters, x[i]))
 
 # Testiranje
 for i in range(1,5):
