@@ -11,7 +11,7 @@
 \usepackage[english,serbian]{babel}
 \usepackage{comment}
 \usepackage{multirow}
-\usepackage[svgnames,table]{xcolor}
+\usepackage[svgnames,table,xcdraw]{xcolor}
 \usepackage{tikz}
 \usepackage{longtable}
 \usepackage{changepage}
@@ -19,6 +19,11 @@
 \usepackage{hhline}
 \usepackage{multicol}
 \usepackage{tabto}
+
+\usepackage{geometry}
+\usepackage{minted}
+\usemintedstyle{borland}
+
 %\usepackage[english,serbianc]{babel} %ukljuciti babel sa ovim opcijama, umesto gornjim, ukoliko se koristi cirilica
 
 \usepackage[unicode]{hyperref}
@@ -66,7 +71,7 @@
 
 \title{Razvoj rekurentne neuronske mreže i primena na analizi vremenskih serija\\  \small{Seminarski rad u okviru kursa\\Računarska inteligencija\\ Matematički fakultet}}
 
-\author{Kristina Pantelić, 91/2016, kristinapantelic@gmail.com \\Nevena Mesar, 107/2015, @.com }
+\author{Kristina Pantelić, 91/2016, kristinapantelic@gmail.com \\Nevena Mesar, 107/2015, mi15107@alas.matf.bg.ac.rs }
 
 %\date{.}
 
@@ -173,6 +178,358 @@ Na osnovu prethodnog opisa, algoritam učenja se izvršava u sledećih osam kora
   \item Odrediti $\Delta{}w{'}_{ij}$ i ažurirati vrednosti $w{'}_{ij}$.
   \item Preći na korak 3.
 \end{enumerate}
+
+% ----------------------------------------------------------------------- IMPLEMENTACIJA
+
+\section{Implementacija algoritma}
+
+U primerima metoda izostavljene su metode korišćenje za logovanje.
+
+\subsection{Potrebne biblioteke}
+Za implementaciju algoritma oslonili smo se na neke od funkcionalnosti postojećih biblioteka:
+\begin{itemize}
+    \item \texttt{numpy} -- kako bismo optimizovali matrične operacije
+    \item \texttt{pandas} -- za ucitavanje i manipulisanje skupom podataka
+    \item \texttt{sklearn} -- za podelu podataka na test i trening skup, predprocesiranje podataka i ocenu greški
+    \item \texttt{matplotlib} -- za iscrtavanje grafika
+\end{itemize}
+
+\begin{minted}{python}
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+from pandas import DataFrame, Series, read_csv, errors, concat, Grouper
+from numpy import zeros, array, append, concatenate, multiply, vstack, matrix, around
+from numpy.random import rand, seed
+from matplotlib import pyplot as plt
+\end{minted}
+
+\subsection{Podaci i predprocesiranje}
+Podaci su preuzeti sa \href{https://www.meteoblue.com/en/weather/archive/export/basel_switzerland_2661604}{Meteo blue}, za Švajcarski grad Basel. Skup podataka je namerno izabran tako da su nema nedostajućih podataka i da su svi dani u kontinuitetu. U realnosti to ne bi bio slučaj. Ovaj rad ne obuhvata obradu takvih slučajeva, ali je jedan od mogućih koraka za unapređenje projekta.
+\\
+U pitanju je period počev od datuma 31.12.1990. do 31.12.2019, ukupno 11326 uzastopnih dana.
+Skup svih atributa koji su dostupni u originalnom skupu podataka se može videti u tabeli \ref{tab:atributi}. Uklonjeni su atributi koji su osenčeni sivom pozadinom. Odlučili smo da ih uklonimo radi brzine izračunavanja, moguće ih je uključivati u cilju eksperimentisanja. \texttt{Timestamp} smo izbacili jer su podaci učitavani hronološki, pa je samim tim indeks u skupu podataka dovoljan.
+
+\begin{table}[h]
+\begin{tabular}{|l|l|l|l|l|}
+\hline
+\rowcolor[HTML]{EFEFEF} 
+Timestamp               &          &                         &       &           \\ \hline
+Temperature             & \textcelsius       & 2 m elevation corrected & daily & Minimum   \\ \hline
+Temperature             & \textcelsius       & 2 m elevation corrected & daily & Maximum   \\ \hline
+Temperature             & \textcelsius       & 2 m elevation corrected & daily & Mean      \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Relative Humidity       & \%       & 2 m                     & daily & Minimum   \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Relative Humidity       & \%       & 2 m                     & daily & Maximum   \\ \hline
+Relative Humidity       & \%       & 2 m                     & daily & Mean      \\ \hline
+Precipitation Total     & mm       & sfc                     & daily & Summation \\ \hline
+Cloud Cover Total       & \%       & sfc                     & daily & Mean      \\ \hline
+Evapotranspiration      & mm       & sfc                     & daily & Summation \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Wind Speed              & km/h     & 10 m                    & daily & Minimum   \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Wind Speed              & km/h     & 10 m                    & daily & Maximum   \\ \hline
+Wind Speed              & km/h     & 10 m                    & daily & Mean      \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Wind Direction Dominant & \textdegree        & 10 m                    & daily & None      \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Temperature             & \textcelsius       & sfc                     & daily & Minimum   \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Temperature             & \textcelsius       & sfc                     & daily & Maximum   \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Temperature             & \textcelsius       & sfc                     & daily & Mean      \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Soil Temperature        & \textcelsius       & 0-10 cm down            & daily & Minimum   \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Soil Temperature        & \textcelsius       & 0-10 cm down            & daily & Maximum   \\ \hline
+Soil Temperature        & \textcelsius       & 0-10 cm down            & daily & Mean      \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Soil Moisture           & fraction & 0-10 cm down            & daily & Minimum   \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Soil Moisture           & fraction & 0-10 cm down            & daily & Maximum   \\ \hline
+Soil Moisture           & fraction & 0-10 cm down            & daily & Mean      \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Vapor Pressure Deficit  & hPa      & 2 m                     & daily & Minimum   \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Vapor Pressure Deficit  & hPa      & 2 m                     & daily & Maximum   \\ \hline
+\rowcolor[HTML]{EFEFEF} 
+Vapor Pressure Deficit  & hPa      & 2 m                     & daily & Mean      \\ \hline
+\end{tabular}
+\caption{Dostupni atributi, osenčeni se ne koriste}
+\label{tab:atributi}
+\end{table}
+Atributi su preimenovani tako da im je dodeljen kraći naziv. Ciljni atribut je \texttt{precipitation}, dok su ostali korišćeni za predviđanje. 
+\begin{minted}{python}
+colnames = {
+    "Basel Temperature [2 m elevation corrected]": "tempMin",
+    "Basel Temperature [2 m elevation corrected].1": "tempMax",
+    "Basel Temperature [2 m elevation corrected].2": "tempMean",
+    # "Basel Relative Humidity [2 m]": "rHumidMin",
+    # "Basel Relative Humidity [2 m].1": "rHumidMax",
+    "Basel Relative Humidity [2 m].2": "rHumidMean",
+    "Basel Precipitation Total": "precipitation",
+    "Basel Cloud Cover Total": "cloudCoverage",
+    "Basel Evapotranspiration": "evapor",
+    # "Basel Wind Speed [10 m]": "windSpeedMin",
+    # "Basel Wind Speed [10 m].1": "windSpeedMax",
+    "Basel Wind Speed [10 m].2": "windSpeedMean",
+    # "Basel Soil Temperature [0-10 cm down]": "soilTempMin",
+    # "Basel Soil Temperature [0-10 cm down].1": "soilTempMax",
+    "Basel Soil Temperature [0-10 cm down].2": "soilTempMean",
+    # "Basel Soil Moisture [0-10 cm down]": "soilMoistMin",
+    # "Basel Soil Moisture [0-10 cm down].1": "soilMoistMax"
+    "Basel Soil Moisture [0-10 cm down].2": "soilMoistMean"
+}
+\end{minted}
+
+ Podaci su podeljeni na test i trening skup u razmeri $3:7$, skup za test ima 3398 redova, dok je za trening korišćeno 7928 redova. Za podelu je korišćena \texttt{test\_train\_split} metoda iz \texttt{sklearn.model\_selection}.
+
+
+\begin{minted}{python}
+def test_train_split_mine():
+    global df, x_train, y_train, x_test, y_test, test_size
+    global g_y_colname, n_x_test, n_x_train
+    Y = df[g_y_colname]
+    X = df.drop(columns=[g_y_colname])
+    x_train, x_test, y_train, y_test = train_test_split(
+        X, Y, shuffle=False, test_size=test_size)
+    n_x_train = x_train.shape[0]
+    n_x_test = x_test.shape[0]
+    x_test.reset_index(inplace=True, drop=True)
+    y_test.reset_index(inplace=True, drop=True)
+\end{minted}
+
+Izvršeno je skaliranje podataka pomoću \texttt{MinMaxScaler} iz \texttt{sklearn.preprocessing} modula tako da sve vrednosti upadnu u rang $[0.1, 0.9]$. Skaliranje testnog skupa vršilo se na osnovu skupa za trening. Ciljni atribut je takođe skaliran na taj interval sa intervala $[0, 100]$.
+
+\begin{minted}{python}
+def scale_attributes():
+    global x_train, x_test, y_train, y_test
+    scaler = MinMaxScaler(feature_range=(0.1, 0.9))
+    scaler.fit(x_train, y_train)
+    x_train = scaler.transform(x_train)
+    x_test = scaler.transform(x_test)
+
+    y_train = f_scale_y(y_train)
+    y_test = f_scale_y(y_test)
+\end{minted}
+
+\subsection{Treniranje mreže}
+
+Kao aktivacionu funkciju koristimo sigmoidnu funkciju.
+\begin{minted}{python}
+def activation_f(u):
+    return 1.0 / (1.0 + exp(-u))
+\end{minted}
+
+\subsubsection{Inicijalizacija}
+Za početak je potrebno inicijalizovati matrice težina i njihove derivate. Težinske matrice su popunjene proizvoljnim vrednostima. Naglasiti da je prva iteracija zbog dodavanja izlaznog čvora, i definisati kroz koliko paterna treba da prođemo. 
+\begin{minted}{python}
+init_iter = True
+n = N * n_attrs + 1     # broj ulaznih cvorova + 1 za bias
+n_x = len(x_train)
+num_of_patterns = n_x - N
+m += 1                  # broj cvorova skrivenog sloja + bias
+w_ = rand(n, m) - 0.5
+dw_ = zeros((n, m))
+w__ = rand(m) - 0.5     # samo jedan output -> obican niz
+dw__ = zeros(m)
+o = zeros(num_of_patterns)
+output_arr = array([])
+day = 0
+end_of_epoch = n_x - N - 1
+\end{minted}
+Treniranje je realizovano kroz epohe. Jedna epoha predstavlja jedan prolazak kroz celokupan skup za trening. Na kraju svake epohe računaju se greške pomoću \texttt{mean\_absolute\_error}, \texttt{mean\_squared\_error} iz \texttt{sklearn.metrics}, kao i  \texttt{root squared error} dobijena od \texttt{mse} i prikazuju na izlazu. Trenira se dok se ne dostigne maksimalan broj epoha koji je 20. Takođe, u prvoj epohi, središnjoj i poslednjoj pravi se grafik koji prikazuje prave vrednosti i predviđene za poslednjih 365 dana epohe. Za sve predviđene vrednosti koje su skalirane na pravu vrednost dale negativan broj smatraćemo da su $0$.
+
+Podrazumevane vrednosti parametara su $ \eta{} = 0.3$ i $\alpha{} = 0.2 $. Prilikom pokretanja programa moguće je postaviti ih na druge vrednosti.
+
+Za broj čvorova skrivenog sloja testirano je par varijanti. Ostavljeno je da se računa po formuli:
+\begin{minted}{python}
+m = (int)((N * n_attrs) * 4)
+\end{minted}
+
+\subsubsection{Koraci algoritma}
+Cilj je konstruisati neuronsku mrežu sa jednim skrivenim slojem koja će za 6 unetih uzastopnih dana prognozirati količinu padavina za 7. dan. Ideja korišćena kako bi se podaci maksimalno iskoristili je prikazana na slici \ref{fig:dani}.
+
+\begin{figure}[h]
+\begin{center}
+\includegraphics[scale=0.7]{dani.JPG}
+\end{center}
+\caption{Paterni za treniranje mreže}
+\label{fig:dani}
+\end{figure}
+
+Ulazni čvorovi su svi atributi 6 uzastopnih dana, tako da su dani jedan za drugim u nizu i poštuje se redosled atributa. Na prvom mestu je uvek bias, dok se na kraj dodavao izlaz prethodne iteracije. U prvoj, inicijalnoj iteraciji, izlazni čvor ne postoji pa se dodavala prazna lista.
+\begin{minted}{python}
+input_nodes = concatenate((bias, 
+                          (x_train[day:(day+N)]).reshape(-1), 
+                          output_arr))
+\end{minted}
+
+Operacije sa matricama su korišćene za ostale korake algoritma radi vremenske efikasnosti.
+\begin{minted}{python}
+# Izracunavanje h1,..., hm cvorova skrivenog sloja
+u = []
+for i in w_.T:
+    u += [activation_f(sum(multiply(i, input_nodes)))]
+h = array(u)
+h[0] = 1  # bias ostaje nepromenjen
+
+o[day] = activation_f(sum(multiply(h, w__)))
+output_arr = array([o[day]])
+
+error = (y_train[day+N] - o[day]) * o[day] * (1.0 - o[day])
+# Izracunavanje deltaH(j)
+dh = w__ * error
+
+# Azuriranje W'(ij) i deltaW'(ij)
+H = h * (1-h) * dh * eta
+dw_ *= alpha
+for j in range(0, m):
+    dw_.T[j] += (input_nodes * H[j])
+w_ += dw_
+
+# Azuriranje W''(jk) i deltaW''(jk)
+dw__ *= alpha
+dw__ += (eta * h * error)
+w__ += dw__
+\end{minted}
+
+Ukoliko smo prošli prvu iteraciju dodajemo još jedan red u težinsku matricu pošto nam se povećao broj ulaznih čvorova za 1.
+
+Implementirano je čuvanje modela koji je imao najmanju \texttt{mse} tako što se upišu težinske matrice u tekstualni fajl koji je prilikom ponovnog pokretanja programa moguće učitati.
+
+\subsection{Testiranje}
+Nakon treniranja mreže ili učitavanja postojećeg modela vrši se evaluacija modela. Prolazi se kroz ceo test skup po sličnom principu po kome smo trenirali mrežu.
+\begin{minted}{python}
+input_nodes = concatenate(
+            (bias, (x_test[day:(day+N)]).reshape(-1), output_arr))
+day += 1
+# Izracunavanje h1,..., hm cvorova skrivenog sloja
+# U prvoj iteraciji nemamo output cvor tako da 
+# ne koristimo celu w' matricu
+u = []
+if init_iter:
+    for i in best_w_[:-1].T:
+        u += [activation_f(multiply(i, input_nodes).sum())]
+    init_iter = False
+else:
+    for i in best_w_.T:
+        u += [activation_f(multiply(i, input_nodes).sum())]
+h = array(u)
+h[0] = 1  # bias ostaje nepromenjen
+
+# Izracunavanje o1,...,op
+o[day] = activation_f(sum(multiply(h, best_w__)))
+output_arr = array([o[day]])
+\end{minted}
+Računa se \texttt{mean\_sqared\_error}, \texttt{mean\_absolute\_error} i prikazuje na izlazu. Generiše se grafik na kome su prikazane prave i predviđene vrednosti.
+
+\subsection{Primeri rezultata}
+Prilikom testiranja imali smo razne kombinacije, od kojih će biti prikazano par. U daljem tekstu imaćemo sledeće oznake:
+\begin{itemize}
+    \item \texttt{n} -- broj ulaznih čvorova
+    \item \texttt{m} -- broj čvorova skrivenog sloja
+\end{itemize}
+Na svakoj strani je prikazan izlaz programa za različite kombinacije parametara. Svaki grafik epohe sadrži poslednjih 365 dana u toj epohi. Isto važi i za prikaz grafika test skupa.
+
+\newgeometry{left=10mm, right=50mm, top=10mm, bottom=10mm, head=0mm, foot=0mm, marginpar=0mm, marginparsep=0mm, headsep=0mm}
+\pagebreak % -------------------------------------------------------------- MODEL
+\subsubsection{Model \texttt{n = 54, m = 270, alpha = 0.5, eta = 0.3}}
+\begin{figure}[h!]
+\begin{center}
+\includegraphics[scale=0.9]{output/output_example_program_10_34_23.JPG}
+\end{center}
+\caption{Output programa za parametre \texttt{m = 270, alpha = 0.5, eta = 0.3}}
+\end{figure}
+\begin{figure}[h!]
+    \centering
+    \subfigure{\includegraphics[width=0.49\linewidth]{plots/plot_epoch_1_time_10_34_23.png}} 
+    \subfigure{\includegraphics[width=0.49\linewidth]{plots/plot_epoch_10_time_10_34_23.png}} 
+    \subfigure{\includegraphics[width=0.49\linewidth]{plots/plot_epoch_20_time_10_34_23.png}}
+    \subfigure{\includegraphics[width=0.49\linewidth]{plots/plot_test_model-model10_34_23-time_10_34_23.png}}
+    \caption{Grafici za parametre \texttt{m = 270, alpha = 0.5, eta = 0.3}}
+\end{figure}
+
+\pagebreak % -------------------------------------------------------------- MODEL
+\subsubsection{Model \texttt{n = 54, m = 270, alpha = 0.2, eta = 0.3}}
+\begin{figure}[h!]
+\begin{center}
+\includegraphics[scale=0.9]{output/output_example_program_11_20_22.JPG}
+\end{center}
+\caption{Output programa za parametre \texttt{m = 270, alpha = 0.2, eta = 0.3}}
+\end{figure}
+\begin{figure}[h!]
+    \centering
+    \subfigure{\includegraphics[width=0.49\textwidth]{plots/plot_epoch_1_time_11_20_22.png}} 
+    \subfigure{\includegraphics[width=0.49\textwidth]{plots/plot_epoch_10_time_11_20_22.png}} 
+    \subfigure{\includegraphics[width=0.49\textwidth]{plots/plot_epoch_20_time_11_20_22.png}}
+    \subfigure{\includegraphics[width=0.49\textwidth]{plots/plot_test_model-model11_20_22-time_11_20_22.png}}
+    \caption{Grafici za parametre \texttt{m = 270, alpha = 0.2, eta = 0.3}}
+\end{figure}
+
+\pagebreak % -------------------------------------------------------------- MODEL
+\subsubsection{Model \texttt{n = 54, m = 108, alpha = 0.2, eta = 0.3}}
+\begin{figure}[h!]
+\begin{center}
+\includegraphics[scale=0.9]{output/output_example_program_14_14_49.JPG}
+\end{center}
+\caption{Output programa za parametre \texttt{n = 54, m = 108, alpha = 0.2, eta = 0.3}}
+\end{figure}
+
+\begin{figure}[h!]
+    \centering
+    \subfigure{\includegraphics[width=0.49\textwidth]{plots/plot_epoch_1_time_14_14_49.png}} 
+    \subfigure{\includegraphics[width=0.49\textwidth]{plots/plot_epoch_10_time_14_14_49.png}} 
+    \subfigure{\includegraphics[width=0.49\textwidth]{plots/plot_epoch_20_time_14_14_49.png}}
+    \subfigure{\includegraphics[width=0.49\textwidth]{plots/plot_test_model-model14_14_49-time_14_14_49.png}}
+    \caption{Grafici za parametre \texttt{n = 54, m = 108, alpha = 0.2, eta = 0.3}}
+\end{figure}
+
+\pagebreak % -------------------------------------------------------------- MODEL
+\subsubsection{Model \texttt{n = 54, m = 108, alpha = 0.9, eta = 0.5}}
+\begin{figure}[h!]
+\begin{center}
+\includegraphics[scale=0.9]{output/output_example_program_14_26_29.JPG}
+\end{center}
+\caption{Output programa za parametre \texttt{m = 108, alpha = 0.9, eta = 0.5}}
+\end{figure}
+\begin{figure}[h!]
+    \centering
+    \subfigure{\includegraphics[width=0.49\textwidth]{plots/plot_epoch_1_time_14_26_29.png}} 
+    \subfigure{\includegraphics[width=0.49\textwidth]{plots/plot_epoch_10_time_14_26_29.png}} 
+    \subfigure{\includegraphics[width=0.49\textwidth]{plots/plot_epoch_20_time_14_26_29.png}}
+    \subfigure{\includegraphics[width=0.49\textwidth]{plots/plot_test_model-model14_26_29-time_14_26_29.png}}
+    \caption{Grafici za parametre \texttt{m = 108, alpha = 0.9, eta = 0.5}}
+\end{figure}
+
+\pagebreak % -------------------------------------------------------------- MODEL
+\subsubsection{Model \texttt{n = 54, m = 216, alpha = 0.2, eta = 0.3}}
+\begin{figure}[h!]
+\begin{center}
+\includegraphics[scale=0.9]{output/output_example_program_14_34_23.JPG}
+\end{center}
+\caption{Output programa za parametre \texttt{m = 216, alpha = 0.2, eta = 0.3}}
+\end{figure}
+
+\begin{figure}[h!]
+    \centering
+    \subfigure{\includegraphics[width=0.49\textwidth]{plots/plot_epoch_1_time_14_34_23.png}} 
+    \subfigure{\includegraphics[width=0.49\textwidth]{plots/plot_epoch_10_time_14_34_23.png}} 
+    \subfigure{\includegraphics[width=0.49\textwidth]{plots/plot_epoch_20_time_14_34_23.png}}
+    \subfigure{\includegraphics[width=0.49\textwidth]{plots/plot_test_model-model14_34_23-time_14_34_23.png}}
+    \caption{Grafici za parametre \texttt{m = 216, alpha = 0.2, eta = 0.3}}
+\end{figure}
+
+\pagebreak
+
+\restoregeometry
+\section{Zaključak}
+
+Prema prikazanim modelima primećujemo da iako su greške modela sa različitim parametrima približne, maltene iste, nakon skaliranja podataka u njihov originalni rang vrednosti vidi se koliko je zapravo loše predviđano. 
+Za veći broj čvorova u skrivenom sloju model uspeva da se donekle približi ekstremima, dok se za manji broj to ne postiže. Za velike vrednosti $\alpha$ prebrzo ode u minimum i ne može da se povrati iz njega. U odnosu na test skup svi modeli su se podjenako loše pokazali. Na nepoznatim podacima nije efikasan, ali za uzastopne podatke se može reći da donekle uspeva da predvidi naredne vrednosti.
+
+Model treniran ovakvim algoritmom koji uzima u obzir samo jedan skriveni sloj je efikasniji za jednostavnije probleme predviđanja, tako da bi naredni korak u poboljšanju algoritma bio dodavanje jos jednog skrivenog sloja i više eksperimentisanja sa parametrima.
 
 \addcontentsline{toc}{section}{Literatura}
 \appendix
