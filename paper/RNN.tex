@@ -366,36 +366,138 @@ input_nodes = concatenate((bias,
                           output_arr))
 \end{minted}
 
-Operacije sa matricama su korišćene za ostale korake algoritma radi vremenske efikasnosti.
+U nastavku biće prikazana naivna implementacija i koraci kojima se došlo do sažimanja operacija i njihovog prevođenja u matrične i vektorske operacije biblioteke \texttt{numpy}. Odlučili smo da iskoristimo \texttt{numpy} biblioteku radi optimizacije vremenske slozenosti osnovnih operacija algoritma.
+
+\paragraph{Izracunavanje h1,..., hm cvorova skrivenog sloja}
 \begin{minted}{python}
-# Izracunavanje h1,..., hm cvorova skrivenog sloja
+# Naivna implementacija
+h[0] = 1.0
+for j in range(1, m+1):
+    u = 0
+    for i in range(0, n+1):
+        u += input_nodes[i] * w_[i][j]
+    h[j] = activation_f(u)
+\end{minted}
+
+Proces dolaska do poboljšane implementacije se svodi na sledeće interpretiranje naivne: \\
+{\it Za svaku kolonu težinske matrice pokoordinatno pomnoži kolonu sa ulaznim čvorovima, dobijene vrednosti sumiraj i provuci kroz aktivacionu funkciju.} Umesto da se fokusiramo na pojedinačne elemente matrice uopštili smo postupak koristeći osobine matrica i vektora. Grafički to možemo predstaviti na primeru manje dimenzije prikazanom na slici \ref{fig:izracunavanjewp}.
+
+\begin{figure}[h!]
+    \subfigure{\includegraphics[width=0.48\linewidth]{naivno_izracunavanje_w_.JPG}}
+    \subfigure{\includegraphics[width=0.48\linewidth]{izracunavanje_w_.JPG}} 
+    \caption{Primeri izračunavanja vrednosti čvorova skrivenog sloja. Naivni pristup sa leve i pristup koji koristi vektorske operacije sa desne strane.}
+    \label{fig:izracunavanjewp}
+\end{figure}
+
+\texttt{numpy} funkcija \texttt{multiply} radi pokoordinatno množenje koje nama u ovom slučaju treba. Takođe, bilo je potrebno transponovati težinsku matricu kako bi se dimenzije poklopile, i atributi množili svojim težinama. Prednost petlje u \texttt{python}-u jeste to što iterira po redovima, pa samim tim možemo automatski proći kroz težinsku matricu.
+Konačno dobijamo poboljšanu verziju ovog koraka:
+\begin{minted}{python}
+# Poboljsana implementacija
 u = []
 for i in w_.T:
     u += [activation_f(sum(multiply(i, input_nodes)))]
 h = array(u)
 h[0] = 1  # bias ostaje nepromenjen
+\end{minted}
 
+\paragraph{Izracunavanje o1,...,op}
+\begin{minted}{python}
+# Naivna implementacija
+for k in range(1, p+1):
+    u = 0
+    for j in range(0, m+1):
+        u += h[j] * w__[j][k]
+    o[day] = activation_f(u)
+\end{minted}
+U prvobitnoj implementaciji $w''$ težinsku matricu smo posmatrali kao matricu, kasnije smo sveli na niz pošto imamo samo jedan izlazni čvor, pa prema tome nema potrebe praviti matricu. Koristi se isti princip kao u prethodnom koraku, pokoordinatno se pomnože skriveni čvorovi sa težinskim vektorom u ovom slučaju, sumiraju se dobijeni rezultati i provuku kroz aktivacionu funkciju.
+\begin{minted}{python}
+# Poboljsana implementacija
 o[day] = activation_f(sum(multiply(h, w__)))
 output_arr = array([o[day]])
+\end{minted}
 
+\paragraph{Greška}
+Greška je broj koji se pojavljuje u izračunavanju na više mesta: prilikom računanja \texttt{dh} i ažuriranja \texttt{dw\_\_}. Zato je pogodno izdvojiti je u posebnu promenljivu i nadalje je koristiti.
+\begin{minted}{python}
 error = (y_train[day+N] - o[day]) * o[day] * (1.0 - o[day])
-# Izracunavanje deltaH(j)
-dh = w__ * error
+\end{minted}
 
-# Azuriranje W'(ij) i deltaW'(ij)
+\paragraph{Izracunavanje deltaH(j)}
+\begin{minted}{python}
+# Naivna implementacija
+for j in range(1, m+1):
+    dh[j] = 0.0
+    for k in range(1, p+1):
+        dh[j] += w__[j][k] * error
+\end{minted}
+Umesto resetovanja vrednosti i njihovog ponovnog izračunavanja u postojećoj \texttt{dh}, možemo direktno iskoristiti vrednosti $w''$ težinskog vektora u našem slučaju i osobine da se prilikom množenja konstantom, svaki element vektora množi tom konstatom.
+\begin{minted}{python}
+# Poboljsana implementacija
+dh = w__ * error
+\end{minted}
+
+\pagebreak
+\paragraph{Azuriranje W'(ij) i deltaW'(ij)} 
+Ovde smo imali više modifikacija u procesu poboljšanja koda. Počeli smo od bukvalne interpretacije koraka algoritma i započeli njegovo parčanje.
+
+\begin{minted}{python}
+# Bukvalna implementacija
+for j in range(1,m+1):    
+    for i in range(0,n+1): 
+        dw_[i][j] = eta * input_nodes[i] * h[j] * (1 - h[j]) * dh[j] 
+                    + alpha * dw_[i][j] 
+        w_[i][j] += dw_[i][j]
+\end{minted}
+Ono što prvo možemo da primetimo jeste da je kolona fiksirana sa \texttt{j} što znaci da se svaki red mnozi sa samo jednom vrednosti iz kolone, tako da izracunavanje koje je vezano za \texttt{j} možemo izdvojiti. Takođe, u to izračunavanje uključujemo i \texttt{eta} pošto je to konstantna vrednost. 
+\begin{minted}{python}
+# Naivna implementacija
+for j in range(1, m+1):
+    H = h[j] * (1 - h[j]) * dh[j]
+    for i in range(0, n+1):
+        dw_[i][j] = eta * input_nodes[i] * H + alpha * dw_[i][j]
+        w_[i][j] += dw_[i][j]
+\end{minted}
+Sledeće što primećujemo jeste da je možemo ovaj korak svesti samo na jednu petlju ukoliko \texttt{H} posmatramo kao vektor kome se vrednosti ne menjaju u zavisnosti od redova težinske matrice. Pokoordinatno će se pomnožiti vrednosti u vektoru i odatle je dovoljno da izdvajamo vrednosti na odgovarajućim indeksima. 
+\\
+Što se ažuriranja \texttt{dw\_} tiče, zaključujemo da se svaki element u redu množi sa \texttt{alpha} i nakon toga mu se dodaje vrednost proizvod \texttt{eta} sa ulaznim čvorom za taj red kao i jedna od vrednosti iz \texttt{H}. Ova operacija se može svesti prvo na množenje matrice konstantom \texttt{alpha} i potom prolazak petljom kroz njene kolone kako bi se sabrali odgovarajući elementi. Primer se može videti na manjoj dimenziji na slici \ref{fig:azuriranjewp}. \\
+Na kraju imamo sabiranje matrica kako bismo ažurirali i \texttt{w\_}.
+
+\begin{minted}{python}
+# Poboljsana implementacija
 H = h * (1-h) * dh * eta
 dw_ *= alpha
 for j in range(0, m):
     dw_.T[j] += (input_nodes * H[j])
 w_ += dw_
+\end{minted}
 
-# Azuriranje W''(jk) i deltaW''(jk)
+\begin{figure}[h!]
+    \centering
+    \subfigure{\includegraphics[width=0.48\linewidth]{azuriranje_w_.JPG}}
+    \subfigure{\includegraphics[width=0.48\linewidth]{poboljsano_azuriranje_w_.JPG}} 
+    \caption{Ažuriranje \texttt{dw\_}. Naivni pristup sa leve strane i poboljšani sa desne.}
+    \label{fig:azuriranjewp}
+\end{figure}
+
+\pagebreak
+\paragraph{Azuriranje W''(jk) i deltaW''(jk)}
+
+\begin{minted}{python}
+# Naivna implementacija
+for k in range(1, p):
+    for j in range(0, m):
+        dw__[j][k] = eta * h[j] * error + alpha * dw__[j][k]
+        w__[j][k] += dw__[j][k]
+\end{minted}
+\texttt{dw\_\_} i \texttt{w\_} su u našem slučaju vektori pošto imamo samo jedan izlaz. Samim tim je dovoljno primeniti pokoordinatne operacije nad vektorima.
+\begin{minted}{python}
+# Poboljsana implementacija
 dw__ *= alpha
 dw__ += (eta * h * error)
 w__ += dw__
 \end{minted}
 
-Ukoliko smo prošli prvu iteraciju dodajemo još jedan red u težinsku matricu pošto nam se povećao broj ulaznih čvorova za 1.
+Ukoliko smo prošli prvu iteraciju dodajemo još jedan red u težinsku matricu \texttt{w\_} pošto nam se povećao broj ulaznih čvorova za 1.
 
 Implementirano je čuvanje modela koji je imao najmanju \texttt{mse} tako što se upišu težinske matrice u tekstualni fajl koji je prilikom ponovnog pokretanja programa moguće učitati.
 
@@ -426,11 +528,7 @@ output_arr = array([o[day]])
 Računa se \texttt{mean\_sqared\_error}, \texttt{mean\_absolute\_error} i prikazuje na izlazu. Generiše se grafik na kome su prikazane prave i predviđene vrednosti.
 
 \subsection{Primeri rezultata}
-Prilikom testiranja imali smo razne kombinacije, od kojih će biti prikazano par. U daljem tekstu imaćemo sledeće oznake:
-\begin{itemize}
-    \item \texttt{n} -- broj ulaznih čvorova
-    \item \texttt{m} -- broj čvorova skrivenog sloja
-\end{itemize}
+Prilikom testiranja imali smo razne kombinacije, od kojih će biti prikazano par. U daljem tekstu imaćemo sledeće oznake: \texttt{n} -- broj ulaznih čvorova, \texttt{m} -- broj čvorova skrivenog sloja.
 Na svakoj strani je prikazan izlaz programa za različite kombinacije parametara. Svaki grafik epohe sadrži poslednjih 365 dana u toj epohi. Isto važi i za prikaz grafika test skupa.
 
 \newgeometry{left=10mm, right=50mm, top=10mm, bottom=10mm, head=0mm, foot=0mm, marginpar=0mm, marginparsep=0mm, headsep=0mm}
@@ -536,8 +634,8 @@ Model treniran ovakvim algoritmom koji uzima u obzir samo jedan skriveni sloj je
 \bibliography{seminarski} 
 \bibliographystyle{plain}
 
-\appendix
-\section{Dodatak}
+% \appendix
+% \section{Dodatak}
 
 
 \end{document}
