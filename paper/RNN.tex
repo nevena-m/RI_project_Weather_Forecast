@@ -136,7 +136,7 @@ E_k = \frac{1}{2}(y_k - o_k)^2.
 \end{equation}
 
 Pri ažuriranju vrednosti $w{''}_{jk}$, važi $w{''}_{jk}=w{''}_{jk}+\Delta{}w{''}_jk$, gde je
-$$\Delta{} w{''}_{jk}=- \eta{}\frac{\partial{}E_k}{\partial{}w{''}_{jk}}+\alpha{}w{''}_{jk}.$$
+$$\Delta{} w{''}_{jk}=- \eta{}\frac{\partial{}E_k}{\partial{}w{''}_{jk}}+\alpha{}\Delta{}w{''}_{jk}.$$
 
 Parametri $\eta{}$ i $\alpha{}$, respektivno, mere uticaj parcijalnog izvoda greške $E_k$ po $w{''}_{jk}$ i prethodne vrednosti \Delta{}$w{''}_{jk}$. Kako je $E_k$ funkcija od $o_k$, $o_k$ funkcija od $u{''}_k$, a $u{''}_k$ funckija čiji je jedan od argumenata $w{''}_{jk}$, prema pravilu o izvodu složene funkcije važi 
 
@@ -152,7 +152,7 @@ $$E_j = \frac{1}{2}\sum_{k=1}^p(y_k - o_k)^2$$.
 
 Pri ažuriranju vrednosti $w'_{ij}$, važi $w'_{ij}=w'_{ij} + \Delta{}w'_{ij}$, gde je
 
-$$\Delta{}{}w'_{ij} = - \eta{}\frac{\partial{}E_j}{\partial{}w{'}_{ij}}+\alpha{}w'_{ij}$$.
+$$\Delta{}{}w'_{ij} = - \eta{}\frac{\partial{}E_j}{\partial{}w{'}_{ij}}+\alpha{}\Delta{}w'_{ij}$$.
 
 Vrednost $\frac{\partial{}E_j}{\partial{}w'_{ij}}$ se može izračunati prema pravilu o izvodu složene funkcije na sledeći način:
 
